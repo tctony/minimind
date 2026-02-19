@@ -2,3 +2,9 @@ model/__pycache__
 out
 website/
 docs-minimind/
+__pycache__
+.DS_Store
+swanlog
+checkpoints
+model_learn_tokenizer
+dataset/*.jsonl
