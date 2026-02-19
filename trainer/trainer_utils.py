@@ -3,6 +3,7 @@
 """
 import os
 import sys
+
 __package__ = "trainer"
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import random
@@ -10,18 +11,23 @@ import math
 import numpy as np
 import torch
 import torch.distributed as dist
+from contextlib import nullcontext
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import Sampler
 from transformers import AutoTokenizer
 from model.model_minimind import MiniMindForCausalLM
 
+
 def get_model_params(model, config):
     total = sum(p.numel() for p in model.parameters()) / 1e6
-    n_routed = getattr(config, 'n_routed_experts', getattr(config, 'num_experts', 0))
+    n_routed = getattr(config, 'n_routed_experts',
+                       getattr(config, 'num_experts', 0))
     n_active = getattr(config, 'num_experts_per_tok', 0)
     n_shared = getattr(config, 'n_shared_experts', 0)
-    expert = sum(p.numel() for n, p in model.named_parameters() if 'mlp.experts.0.' in n) / 1e6
-    shared_expert = sum(p.numel() for n, p in model.named_parameters() if 'mlp.shared_experts.0.' in n) / 1e6
+    expert = sum(p.numel() for n, p in model.named_parameters()
+                 if 'mlp.experts.0.' in n) / 1e6
+    shared_expert = sum(p.numel() for n, p in model.named_parameters()
+                        if 'mlp.shared_experts.0.' in n) / 1e6
     base = total - (expert * n_routed) - (shared_expert * n_shared)
     active = base + (expert * n_active) + (shared_expert * n_shared)
     if active < total: Logger(f'Model Params: {total:.2f}M-A{active:.2f}M')
@@ -38,7 +44,35 @@ def Logger(content):
 
 
 def get_lr(current_step, total_steps, lr):
-    return lr*(0.1 + 0.45*(1 + math.cos(math.pi * current_step / total_steps)))
+    return lr * (0.1 + 0.45 *
+                 (1 + math.cos(math.pi * current_step / total_steps)))
+
+
+def get_default_device(is_eval=False):
+    if torch.cuda.is_available():
+        return "cuda:0"
+    # 推理时数据量小，在cpu上直接跑更快
+    if not is_eval and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def get_default_dtype(device):
+    "混合精度类型（MPS不支持bfloat16）"
+    return "float32" if "mps" in device else "bfloat16"
+
+
+def get_autocast_ctx(device_type, dtype_str):
+    dtype = torch.bfloat16 if dtype_str == "bfloat16" else torch.float16
+    if device_type == "cuda":
+        return torch.cuda.amp.autocast(dtype=dtype)
+    return nullcontext()  # MPS/CPU: no autocast
+
+
+def get_grad_scaler(device_type, dtype_str):
+    return torch.amp.GradScaler(device_type,
+                                enabled=(dtype_str == 'float16'
+                                         and device_type == 'cuda'))
 
 
 def init_distributed_mode():
@@ -63,14 +97,24 @@ def setup_seed(seed: int):
     if torch.backends.mps.is_available():
         torch.mps.manual_seed(seed)
 
-def lm_checkpoint(lm_config, weight='full_sft', model=None, optimizer=None, epoch=0, step=0, wandb=None, save_dir='../checkpoints', **kwargs):
+
+def lm_checkpoint(lm_config,
+                  weight='full_sft',
+                  model=None,
+                  optimizer=None,
+                  epoch=0,
+                  step=0,
+                  wandb=None,
+                  save_dir='../checkpoints',
+                  **kwargs):
     os.makedirs(save_dir, exist_ok=True)
     moe_path = '_moe' if lm_config.use_moe else ''
     ckp_path = f'{save_dir}/{weight}_{lm_config.hidden_size}{moe_path}.pth'
     resume_path = f'{save_dir}/{weight}_{lm_config.hidden_size}{moe_path}_resume.pth'
 
     if model is not None:
-        raw_model = model.module if isinstance(model, DistributedDataParallel) else model
+        raw_model = model.module if isinstance(
+            model, DistributedDataParallel) else model
         raw_model = getattr(raw_model, '_orig_mod', raw_model)
         state_dict = raw_model.state_dict()
         state_dict = {k: v.half().cpu() for k, v in state_dict.items()}
@@ -90,13 +134,15 @@ def lm_checkpoint(lm_config, weight='full_sft', model=None, optimizer=None, epoc
             'optimizer': optimizer.state_dict(),
             'epoch': epoch,
             'step': step,
-            'world_size': dist.get_world_size() if dist.is_initialized() else 1,
+            'world_size':
+            dist.get_world_size() if dist.is_initialized() else 1,
             'wandb_id': wandb_id
         }
         for key, value in kwargs.items():
             if value is not None:
                 if hasattr(value, 'state_dict'):
-                    raw_value = value.module if isinstance(value, DistributedDataParallel) else value
+                    raw_value = value.module if isinstance(
+                        value, DistributedDataParallel) else value
                     raw_value = getattr(raw_value, '_orig_mod', raw_value)
                     resume_data[key] = raw_value.state_dict()
                 else:
@@ -117,27 +163,36 @@ def lm_checkpoint(lm_config, weight='full_sft', model=None, optimizer=None, epoc
             current_ws = dist.get_world_size() if dist.is_initialized() else 1
             if saved_ws != current_ws:
                 ckp_data['step'] = ckp_data['step'] * saved_ws // current_ws
-                Logger(f'GPU数量变化({saved_ws}→{current_ws})，step已自动转换为{ckp_data["step"]}')
+                Logger(
+                    f'GPU数量变化({saved_ws}→{current_ws})，step已自动转换为{ckp_data["step"]}'
+                )
             return ckp_data
         return None
 
 
-def init_model(lm_config, from_weight='pretrain', tokenizer_path='../model', save_dir='../out', device='cuda'):
+def init_model(lm_config,
+               from_weight='pretrain',
+               tokenizer_path='../model',
+               save_dir='../out',
+               device='cuda'):
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     model = MiniMindForCausalLM(lm_config)
 
-    if from_weight!= 'none':
+    if from_weight != 'none':
         moe_suffix = '_moe' if lm_config.use_moe else ''
         weight_path = f'{save_dir}/{from_weight}_{lm_config.hidden_size}{moe_suffix}.pth'
         weights = torch.load(weight_path, map_location=device)
         model.load_state_dict(weights, strict=False)
 
     get_model_params(model, lm_config)
-    Logger(f'Trainable Params: {sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6:.3f}M')
+    Logger(
+        f'Trainable Params: {sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6:.3f}M'
+    )
     return model.to(device), tokenizer
 
 
 class SkipBatchSampler(Sampler):
+
     def __init__(self, sampler, batch_size, skip_batches=0):
         self.sampler = sampler
         self.batch_size = batch_size
@@ -159,5 +214,6 @@ class SkipBatchSampler(Sampler):
             yield batch
 
     def __len__(self):
-        total_batches = (len(self.sampler) + self.batch_size - 1) // self.batch_size
+        total_batches = (len(self.sampler) + self.batch_size -
+                         1) // self.batch_size
         return max(0, total_batches - self.skip_batches)

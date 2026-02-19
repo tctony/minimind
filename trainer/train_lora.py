@@ -9,14 +9,15 @@ import time
 import warnings
 import torch
 import torch.distributed as dist
-from contextlib import nullcontext
 from torch import optim, nn
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler
 from model.model_minimind import MiniMindConfig
 from dataset.lm_dataset import SFTDataset
 from model.model_lora import save_lora, apply_lora
-from trainer.trainer_utils import get_lr, Logger, is_main_process, lm_checkpoint, init_distributed_mode, setup_seed, init_model, SkipBatchSampler
+from trainer.trainer_utils import (get_lr, Logger, is_main_process, lm_checkpoint, init_distributed_mode,
+                                   setup_seed, init_model, SkipBatchSampler,
+                                   get_default_device, get_default_dtype, get_autocast_ctx, get_grad_scaler)
 
 warnings.filterwarnings('ignore')
 
@@ -72,8 +73,9 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=50, help="训练轮数")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
     parser.add_argument("--learning_rate", type=float, default=1e-4, help="初始学习率")
-    parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu", help="训练设备")
-    parser.add_argument("--dtype", type=str, default="bfloat16", help="混合精度类型")
+    default_device = get_default_device()
+    parser.add_argument("--device", type=str, default=default_device, help="训练设备")
+    parser.add_argument("--dtype", type=str, default=get_default_dtype(default_device), help="混合精度类型（MPS不支持bfloat16）")
     parser.add_argument("--num_workers", type=int, default=8, help="数据加载线程数")
     parser.add_argument("--accumulation_steps", type=int, default=1, help="梯度累积步数")
     parser.add_argument("--grad_clip", type=float, default=1.0, help="梯度裁剪阈值")
@@ -102,9 +104,8 @@ if __name__ == "__main__":
     ckp_data = lm_checkpoint(lm_config, weight=args.lora_name, save_dir='../checkpoints') if args.from_resume==1 else None
     
     # ========== 3. 设置混合精度 ==========
-    device_type = "cuda" if "cuda" in args.device else "cpu"
-    dtype = torch.bfloat16 if args.dtype == "bfloat16" else torch.float16
-    autocast_ctx = nullcontext() if device_type == "cpu" else torch.cuda.amp.autocast(dtype=dtype)
+    device_type = torch.device(args.device).type
+    autocast_ctx = get_autocast_ctx(device_type, args.dtype)
     
     # ========== 4. 配wandb ==========
     wandb = None
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     # ========== 6. 定义数据和优化器 ==========
     train_ds = SFTDataset(args.data_path, tokenizer, max_length=args.max_seq_len)
     train_sampler = DistributedSampler(train_ds) if dist.is_initialized() else None
-    scaler = torch.cuda.amp.GradScaler(enabled=(args.dtype == 'float16'))
+    scaler = get_grad_scaler(device_type, args.dtype)
     optimizer = optim.AdamW(lora_params, lr=args.learning_rate)
     
     # ========== 7. 从ckp恢复状态 ==========
