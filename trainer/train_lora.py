@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import argparse
 import time
 import warnings
+warnings.filterwarnings('ignore')
 import torch
 import torch.distributed as dist
 from torch import optim, nn
@@ -18,8 +19,6 @@ from model.model_lora import save_lora, apply_lora
 from trainer.trainer_utils import (get_lr, Logger, is_main_process, lm_checkpoint, init_distributed_mode,
                                    setup_seed, init_model, SkipBatchSampler,
                                    get_default_device, get_default_dtype, get_autocast_ctx, get_grad_scaler)
-
-warnings.filterwarnings('ignore')
 
 
 def train_epoch(epoch, loader, iters, lora_params, start_step=0, wandb=None):

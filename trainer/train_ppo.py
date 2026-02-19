@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import argparse
 import re
 import warnings
+warnings.filterwarnings('ignore')
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
@@ -22,8 +23,6 @@ from dataset.lm_dataset import RLAIFDataset
 from trainer.trainer_utils import (Logger, is_main_process, lm_checkpoint, init_distributed_mode,
                                    setup_seed, SkipBatchSampler, init_model,
                                    get_default_device, get_default_dtype, get_autocast_ctx)
-
-warnings.filterwarnings('ignore')
 
 
 # 自定义的Critic模型，继承自MiniMindLM

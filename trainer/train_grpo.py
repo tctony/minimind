@@ -8,6 +8,7 @@ import argparse
 import re
 import gc
 import warnings
+warnings.filterwarnings('ignore')
 import torch
 import torch.distributed as dist
 from transformers import AutoTokenizer
@@ -21,8 +22,6 @@ from dataset.lm_dataset import RLAIFDataset
 from trainer.trainer_utils import (Logger, is_main_process, lm_checkpoint, init_distributed_mode,
                                    setup_seed, SkipBatchSampler, init_model,
                                    get_default_device, get_default_dtype, get_autocast_ctx)
-
-warnings.filterwarnings('ignore')
 
 
 def calculate_rewards(prompts, responses, reward_model, reward_tokenizer):
