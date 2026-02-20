@@ -31,6 +31,7 @@ def init_model(args):
 
 def main():
     parser = argparse.ArgumentParser(description="MiniMind模型推理与对话")
+    parser.add_argument('--auto', default=False, action='store_true', help="自动跑测试的case")
     parser.add_argument('--load_from', default='model', type=str, help="模型加载路径（model=原生torch权重，其他路径=transformers格式）")
     parser.add_argument('--save_dir', default='out', type=str, help="模型权重目录")
     parser.add_argument('--weight', default='full_sft', type=str, help="权重名称前缀（pretrain, full_sft, rlhf, reason, ppo_actor, grpo, spo）")
@@ -60,11 +61,16 @@ def main():
     
     conversation = []
     model, tokenizer = init_model(args)
-    input_mode = int(input('[0] 自动测试\n[1] 手动输入\n'))
+    # input_mode = int(input('[0] 自动测试\n[1] 手动输入\n'))
+    input_mode = 0 if args.auto else 1
     streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     
     prompt_iter = prompts if input_mode == 0 else iter(lambda: input('💬: '), '')
     for prompt in prompt_iter:
+        if prompt == '/exit':
+            print("goodbye!")
+            exit(0)
+
         setup_seed(2026) # or setup_seed(random.randint(0, 2048))
         if input_mode == 0: print(f'💬: {prompt}')
         conversation = conversation[-args.historys:] if args.historys else []
