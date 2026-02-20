@@ -1,0 +1,27 @@
+- python venv
+- torch, transformers
+- dataset
+  - https://huggingface.co/datasets/jingyaogong/minimind_dataset
+  - https://www.modelscope.cn/datasets/gongjy/minimind_dataset
+- tokenizer
+  - byte level BPE
+- wandb: swanlab.cn
+- pretrain
+  - nn.embedding, nn.linear
+  - softmax
+  - rope， yarn
+  - rms norm
+  - gqa
+    - n_head, n_kv_head
+    - q_proj, k_proj, v_proj, o_proj
+  - ffn
+    - swiglu
+    - gate_proj
+    - up_proj
+    - down_proj
+  - ce loss
+- sft
+- distil
+  - block box
+  - white box
+  - kl divergence loss
