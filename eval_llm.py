@@ -31,7 +31,7 @@ def init_model(args):
 
 def main():
     parser = argparse.ArgumentParser(description="MiniMind模型推理与对话")
-    parser.add_argument('--auto', default=False, action='store_true', help="自动跑测试的case")
+    parser.add_argument('--auto', default=False, action='store_true', help="自动跑测试的case，否则手动输入; 默认False")
     parser.add_argument('--load_from', default='model', type=str, help="模型加载路径（model=原生torch权重，其他路径=transformers格式）")
     parser.add_argument('--save_dir', default='out', type=str, help="模型权重目录")
     parser.add_argument('--weight', default='full_sft', type=str, help="权重名称前缀（pretrain, full_sft, rlhf, reason, ppo_actor, grpo, spo）")
@@ -65,11 +65,21 @@ def main():
     input_mode = 0 if args.auto else 1
     streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
     
-    prompt_iter = prompts if input_mode == 0 else iter(lambda: input('💬: '), '')
+    _sentinel = object()
+
+    def get_input():
+        while True:
+            try:
+                text = input('💬: ')
+            except EOFError:
+                return _sentinel
+            if text == '/exit':
+                return _sentinel
+            if text:
+                return text
+
+    prompt_iter = prompts if input_mode == 0 else iter(get_input, _sentinel)
     for prompt in prompt_iter:
-        if prompt == '/exit':
-            print("goodbye!")
-            exit(0)
 
         setup_seed(2026) # or setup_seed(random.randint(0, 2048))
         if input_mode == 0: print(f'💬: {prompt}')
@@ -78,7 +88,8 @@ def main():
 
         templates = {"conversation": conversation, "tokenize": False, "add_generation_prompt": True}
         if args.weight == 'reason': templates["enable_thinking"] = True # 仅Reason模型使用
-        inputs = tokenizer.apply_chat_template(**templates) if args.weight != 'pretrain' else (tokenizer.bos_token + prompt)
+        use_template = args.weight != 'pretrain' or args.lora_weight != 'None'
+        inputs = tokenizer.apply_chat_template(**templates) if use_template else (tokenizer.bos_token + prompt)
         inputs = tokenizer(inputs, return_tensors="pt", truncation=True).to(args.device)
 
         print('🤖: ', end='')
