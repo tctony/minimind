@@ -132,6 +132,7 @@ if __name__ == "__main__":
     # 冻结非LoRA参数，收集LoRA参数
     lora_params = []
     for name, param in model.named_parameters():
+        # print(name, param.shape)
         if 'lora' in name:
             param.requires_grad = True
             lora_params.append(param)

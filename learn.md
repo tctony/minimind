@@ -25,3 +25,7 @@
   - block box
   - white box
   - kl divergence loss
+- lora
+  - low rank matrix
+  - 512x512 vs 512x8 + 8x512
+- [ ] reasoning
