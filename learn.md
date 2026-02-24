@@ -28,11 +28,11 @@
 - lora
   - low rank matrix
   - 512x512 vs 512x8 + 8x512
+- [ ] ppo
 - [ ] dpo
 - [ ] reason
-- [ ] ppo
 - [ ] grpo
 - [ ] spo
 - [ ] yarn
 - [ ] moe
-- [ ] cpu + gpu 串行如何搞？workload大概1:3
+- [ ] cpu + gpu 串行如何搞？workload分配大概1:3
