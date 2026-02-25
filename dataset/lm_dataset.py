@@ -143,9 +143,11 @@ class DPODataset(Dataset):
 
         rejected_input_ids = rejected_encoding['input_ids']
         rejected_loss_mask = self.generate_loss_mask(rejected_input_ids)
+
         x_chosen = torch.tensor(chosen_input_ids[:-1], dtype=torch.long)
         y_chosen = torch.tensor(chosen_input_ids[1:], dtype=torch.long)
         mask_chosen = torch.tensor(chosen_loss_mask[1:], dtype=torch.long)
+
         x_rejected = torch.tensor(rejected_input_ids[:-1], dtype=torch.long)
         y_rejected = torch.tensor(rejected_input_ids[1:], dtype=torch.long)
         mask_rejected = torch.tensor(rejected_loss_mask[1:], dtype=torch.long)

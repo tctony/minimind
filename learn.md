@@ -28,10 +28,12 @@
 - lora
   - low rank matrix
   - 512x512 vs 512x8 + 8x512
-- [ ] ppo
-- [ ] dpo
+- po
+  - -f(r_t) * g(A_t) + beta * KL_t
+- ppo
+- dpo
 - [ ] reason
-- [ ] grpo
+- grpo
 - [ ] spo
 - [ ] yarn
 - [ ] moe
