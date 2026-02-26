@@ -32,9 +32,7 @@
   - -f(r_t) * g(A_t) + beta * KL_t
 - ppo
 - dpo
-- [ ] reason
+- reason
 - grpo
-- [ ] spo
-- [ ] yarn
-- [ ] moe
-- [ ] cpu + gpu 串行如何搞？workload分配大概1:3
+- spo
+- moe
