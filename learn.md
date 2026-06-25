@@ -24,6 +24,7 @@
     - up_proj
     - down_proj
   - ce loss
+  - tie embedding（输入 embedding 与输出 lm_head 权重共享）
 - sft
 - distil
   - block box
@@ -40,3 +41,18 @@
 - grpo
 - spo
 - moe
+  - n_routed_experts, num_experts_per_tok, n_shared_experts
+  - router / gate, aux_loss（负载均衡）
+- agent（上游新增，reason/spo 训练脚本已被上游移除）
+  - tool calling 工具调用
+  - rollout engine（采样 + 经验回放）
+  - reward model
+- 训练基础设施
+  - device: cuda / mps / cpu（MPS 不支持 bfloat16，自动回退 float32）
+  - 混合精度: autocast + GradScaler（仅 cuda+float16 时启用）
+  - PYTORCH_ENABLE_MPS_FALLBACK=1（MPS 缺失算子回退 CPU）
+  - 梯度累积 accumulation_steps、梯度裁剪 grad_clip
+  - 学习率: cosine 衰减调度
+  - torch.compile 加速
+  - ddp: DistributedDataParallel + nccl
+  - checkpoint 续训 resume（保存 model/optimizer/scaler/step）
