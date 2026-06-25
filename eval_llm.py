@@ -6,7 +6,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TextStreamer
 from model.model_minimind import MiniMindConfig, MiniMindForCausalLM
 from model.model_lora import *
-from trainer.trainer_utils import setup_seed, get_model_params
+from trainer.trainer_utils import setup_seed, get_model_params, get_default_device
 warnings.filterwarnings('ignore')
 
 def init_model(args):
@@ -31,6 +31,7 @@ def init_model(args):
 
 def main():
     parser = argparse.ArgumentParser(description="MiniMind模型推理与对话")
+    parser.add_argument('--auto', default=False, action='store_true', help="自动跑测试的case，否则手动输入; 默认False")
     parser.add_argument('--load_from', default='model', type=str, help="模型加载路径（model=原生torch权重，其他路径=transformers格式）")
     parser.add_argument('--save_dir', default='out', type=str, help="模型权重目录")
     parser.add_argument('--weight', default='full_sft', type=str, help="权重名称前缀（pretrain, full_sft, rlhf, reason, ppo_actor, grpo, spo）")
@@ -45,7 +46,7 @@ def main():
     parser.add_argument('--open_thinking', default=0, type=int, help="是否开启自适应思考（0=否，1=是）")
     parser.add_argument('--historys', default=0, type=int, help="携带历史对话轮数（需为偶数，0表示不携带历史）")
     parser.add_argument('--show_speed', default=1, type=int, help="显示decode速度（tokens/s）")
-    parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu', type=str, help="运行设备")
+    parser.add_argument('--device', default=get_default_device(True), type=str, help="运行设备")
     args = parser.parse_args()
     
     prompts = [
@@ -61,10 +62,23 @@ def main():
     
     conversation = []
     model, tokenizer = init_model(args)
-    input_mode = int(input('[0] 自动测试\n[1] 手动输入\n'))
+    input_mode = 0 if args.auto else 1
     streamer = TextStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
-    
-    prompt_iter = prompts if input_mode == 0 else iter(lambda: input('💬: '), '')
+
+    _sentinel = object()
+
+    def get_input():
+        while True:
+            try:
+                text = input('💬: ')
+            except EOFError:
+                return _sentinel
+            if text == '/exit':
+                return _sentinel
+            if text:
+                return text
+
+    prompt_iter = prompts if input_mode == 0 else iter(get_input, _sentinel)
     for prompt in prompt_iter:
         setup_seed(random.randint(0, 31415926))
         if input_mode == 0: print(f'💬: {prompt}')
