@@ -10,6 +10,7 @@ import math
 import numpy as np
 import torch
 import torch.distributed as dist
+from contextlib import nullcontext
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import Sampler
 from transformers import AutoTokenizer, AutoModel, AutoModelForSequenceClassification
@@ -41,6 +42,31 @@ def get_lr(current_step, total_steps, lr):
     return lr*(0.1 + 0.45*(1 + math.cos(math.pi * current_step / total_steps)))
 
 
+def get_default_device(is_eval=False):
+    if torch.cuda.is_available():
+        return "cuda:0"
+    # 推理时数据量小，在cpu上直接跑更快
+    if not is_eval and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def get_default_dtype(device):
+    "混合精度类型（MPS不支持bfloat16）"
+    return "float32" if "mps" in device else "bfloat16"
+
+
+def get_autocast_ctx(device_type, dtype_str):
+    dtype = torch.bfloat16 if dtype_str == "bfloat16" else torch.float16
+    if device_type == "cuda":
+        return torch.cuda.amp.autocast(dtype=dtype)
+    return nullcontext()  # MPS/CPU: no autocast
+
+
+def get_grad_scaler(device_type, dtype_str):
+    return torch.amp.GradScaler(device_type, enabled=(dtype_str == 'float16' and device_type == 'cuda'))
+
+
 def init_distributed_mode():
     if int(os.environ.get("RANK", -1)) == -1:
         return 0  # 非DDP模式
@@ -55,10 +81,13 @@ def setup_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    if torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
 
 def lm_checkpoint(lm_config, weight='full_sft', model=None, optimizer=None, epoch=0, step=0, wandb=None, save_dir='../checkpoints', **kwargs):
     os.makedirs(save_dir, exist_ok=True)
@@ -103,7 +132,10 @@ def lm_checkpoint(lm_config, weight='full_sft', model=None, optimizer=None, epoc
         torch.save(resume_data, resume_tmp)
         os.replace(resume_tmp, resume_path)
         del state_dict, resume_data
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
     else:  # 加载模式
         if os.path.exists(resume_path):
             ckp_data = torch.load(resume_path, map_location='cpu')
