@@ -1,0 +1,42 @@
+- upstream 同步记录
+  - 上次 master: 349e74ec7b049153b7f1f7d29e8b79553a0fbb01
+  - 本次 master: 3f1a7cc25b19a861cd1bd6ed313be526b9ecdaf8
+  - 旧 develop tip(已废弃，含旧个人提交): b131421955ad4b71c3082c6f0de0a23be8dc229e
+- python venv
+- torch, transformers
+- dataset
+  - https://huggingface.co/datasets/jingyaogong/minimind_dataset
+  - https://www.modelscope.cn/datasets/gongjy/minimind_dataset
+- tokenizer
+  - byte level BPE
+- wandb: swanlab.cn
+- pretrain
+  - nn.embedding, nn.linear
+  - softmax
+  - rope， yarn
+  - rms norm
+  - gqa
+    - n_head, n_kv_head
+    - q_proj, k_proj, v_proj, o_proj
+  - ffn
+    - swiglu
+    - gate_proj
+    - up_proj
+    - down_proj
+  - ce loss
+- sft
+- distil
+  - block box
+  - white box
+  - kl divergence loss
+- lora
+  - low rank matrix
+  - 512x512 vs 512x8 + 8x512
+- po
+  - -f(r_t) * g(A_t) + beta * KL_t
+- ppo
+- dpo
+- reason
+- grpo
+- spo
+- moe
